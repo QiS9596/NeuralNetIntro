@@ -55,14 +55,17 @@ class Neuron:
         :return: delta value for this neuron
         """
         if isOutput and err is not None:
-            self.delta = err*self.activation_func(self.pre_synapse_excites, dx=True)
+            self.delta = err * self.activation_func(self.pre_synapse_excites, dx=True)
             return self.delta
         else:
-            self.delta = self.activation_func(self.pre_synapse_excites, dx=True)*delta_next
+            self.delta = self.activation_func(self.pre_synapse_excites, dx=True) * delta_next
             return self.delta
 
     def update(self, lr=0.5, momentum=0.9):
-        pass
+        update = lr * self.delta * self.augmented_input
+        new_weight = self.weight + update + momentum * self.last_update
+        self.last_update = update
+        self.weight = new_weight
 
 
 class Layer:
@@ -110,13 +113,25 @@ class DenseLayer(Layer):
             self.delta_ = delta_
             self.previous_layer.back_propagate()
 
-        elif not self.isOutput :
+        elif not self.isOutput:
             for i in range(len(self.neurons)):
                 delta_neuron = self.neurons[i].back_propagate(delta_next=self.get_weighted_delta_sum(i))
                 delta_.append(delta_neuron)
             self.delta_ = delta_
             self.previous_layer.back_propagate()
 
+    def update(self, lr=0.5, momentum=0.9):
+        """
+        After calculating the delta, update function should be called to actually update the weight of each neuron
+        The update method should be invoked at the output layer and will be executed to the entire network at a recursive
+        order
+        :param lr: learning rate
+        :param momentum: momentum term, set to 0 to disable momentum
+        :return:
+        """
+        for neuron in self.neurons:
+            neuron.update(lr=lr, momentum=momentum)
+        self.previous_layer.update(lr=lr, momentum=momentum)
 
     def get_weighted_delta_sum(self, index):
         if self.isOutput:
@@ -138,8 +153,20 @@ class InputLayer(Layer):
     def back_propagate(self):
         return
 
-input = InputLayer(3)
-hid1 = DenseLayer(5,input)
-hid2 = DenseLayer(3, hid1,isOutput=True)
-input.forward_propagate(np.random.rand(3))
-hid2.back_propagate(np.random.rand(3))
+    def update(self, lr=0.5, momentum=0.9):
+        return
+
+
+# input = InputLayer(3)
+# hid1 = DenseLayer(5, input)
+# hid2 = DenseLayer(3, hid1, isOutput=True)
+# input_value = np.random.rand(3)
+# a0 = input.forward_propagate(input_value)
+# for i in range(100):
+#     a = input.forward_propagate(input_value)
+#     diff = np.array([1,1,0])-a
+#     hid2.back_propagate(diff)
+#     hid2.update()
+#     b = input.forward_propagate(input_value)
+# print(a0)
+# print(b)

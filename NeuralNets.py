@@ -8,9 +8,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib
 from abc import abstractmethod
+from tqdm import tqdm
 
 matplotlib.use('TkAgg')
-
+TEST_MODE=False
 
 def sigmoid(x, dx=False):
     if dx:
@@ -28,7 +29,7 @@ class Neuron:
         """
         self.pre_synapse_excites = 0
         self.layer = layer
-        self.weight = np.random.rand(n_dim + 1)
+        self.weight = np.random.rand(n_dim + 1)*2-1
         self.activation_func = activation_func
         self.last_update = 0
         self.delta = 0
@@ -74,6 +75,9 @@ class Neuron:
         new_weight = self.weight + update + momentum * self.last_update
         self.last_update = update
         self.weight = new_weight
+
+    def print_weight(self):
+        print(self.weight)
 
 
 class Layer:
@@ -189,6 +193,10 @@ class DenseLayer(Layer):
             sum += np.multiply(self.next_layer.neurons[i].weight[index], self.next_layer.neurons[i].delta)
         return sum
 
+    def print_weight(self):
+        for i in range(len(self.neurons)):
+            self.neurons[i].print_weight()
+
 
 class InputLayer(Layer):
     """
@@ -279,7 +287,7 @@ class Model:
         if Xs.shape[0] != Ys.shape[0]:
             return
         log = []
-        for epoch in range(max_epochs):
+        for epoch in tqdm(range(max_epochs)):
             for i in range(Xs.shape[0]):
                 # loop for updating weights
                 x = Xs[i, :]
@@ -314,14 +322,14 @@ class Model:
 
 
 # sample test code
-# input = InputLayer(3)
-# hid1 = DenseLayer(5, input)
-# hid2 = DenseLayer(2, hid1, isOutput=True)
-#
-# mdl = Model(input, hid2)
-#
-# input_value = np.random.rand(2, 3)
-# desired_output = np.array([[1, 0], [1, 1]])
-# log = mdl.fit(Xs=input_value, Ys=desired_output)
-# print(mdl.predict(input_value))
-# print(log)
+input = InputLayer(3)
+hid1 = DenseLayer(5, input)
+hid2 = DenseLayer(2, hid1, isOutput=True)
+
+mdl = Model(input, hid2)
+
+input_value = np.random.rand(2, 3)
+desired_output = np.array([[1, 0], [1, 1]])
+log = mdl.fit(Xs=input_value, Ys=desired_output,max_epochs=10000)
+print(mdl.predict(input_value))
+print(log)

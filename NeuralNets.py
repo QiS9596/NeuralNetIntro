@@ -11,12 +11,19 @@ from abc import abstractmethod
 from tqdm import tqdm
 
 matplotlib.use('TkAgg')
-TEST_MODE=False
+VERBOSE_ARGS = {'PRINT_SKIP_ITER': 100}
+
 
 def sigmoid(x, dx=False):
     if dx:
         return sigmoid(x) * (1 - sigmoid(x))
     return 1 / (1 + np.exp(-x))
+
+
+def linear(x, dx=False):
+    if dx:
+        return 1.0
+    return x
 
 
 class Neuron:
@@ -29,7 +36,7 @@ class Neuron:
         """
         self.pre_synapse_excites = 0
         self.layer = layer
-        self.weight = np.random.rand(n_dim + 1)*2-1
+        self.weight = np.random.rand(n_dim + 1) * 2 - 1
         self.activation_func = activation_func
         self.last_update = 0
         self.delta = 0
@@ -86,9 +93,10 @@ class Layer:
     each layer will keep track of the previous layer and next layer so that recursive function call could be implemented
     """
 
-    def __init__(self, n_neurons):
+    def __init__(self, n_neurons, name=None):
         self.n_neurons = n_neurons
         self.next_layer = None
+        self.name = name
 
     def set_next_layer(self, next_layer):
         self.next_layer = next_layer
@@ -103,7 +111,7 @@ class DenseLayer(Layer):
     Dense layer (Fully-connected Feed-forward layer)
     """
 
-    def __init__(self, n_neurons, previous_layer, isOutput=False, activation_function=sigmoid):
+    def __init__(self, n_neurons, previous_layer, isOutput=False, activation_function=sigmoid, name=None):
         """
         Initialize a DenseLayer object
         :param n_neurons: number of neurons of current layer
@@ -111,7 +119,7 @@ class DenseLayer(Layer):
         :param isOutput: bool value to indicate if this layer is a output layer
         :param activation_function: activation function, function object
         """
-        Layer.__init__(self, n_neurons)
+        Layer.__init__(self, n_neurons, name)
         self.isOutput = isOutput
         self.next_layer = None
         self.previous_layer = previous_layer
@@ -194,8 +202,18 @@ class DenseLayer(Layer):
         return sum
 
     def print_weight(self):
+        print('--------------------------------')
+        if self.name is not None:
+            print("Layer " + self.name)
+        print("Layer type: Dense")
+        print("n_neurons: " + str(self.n_neurons))
         for i in range(len(self.neurons)):
             self.neurons[i].print_weight()
+
+        if self.isOutput:
+            print('--------------------------------')
+            return
+        self.next_layer.print_weight()
 
 
 class InputLayer(Layer):
@@ -203,12 +221,12 @@ class InputLayer(Layer):
     InputLayer object
     """
 
-    def __init__(self, n_neurons):
+    def __init__(self, n_neurons, name=None):
         """
 
         :param n_neurons: dimensionality of input
         """
-        Layer.__init__(self, n_neurons)
+        Layer.__init__(self, n_neurons, name=name)
         self.next_layer = None
 
     def forward_propagate(self, input):
@@ -243,6 +261,14 @@ class InputLayer(Layer):
         """
         return
 
+    def print_weight(self):
+        print('--------------------------------')
+        if self.name is not None:
+            print("Layer " + self.name)
+        print("Layer type: Input")
+        print("dim: " + str(self.n_neurons))
+        self.next_layer.print_weight()
+
 
 class Model:
     """
@@ -273,7 +299,7 @@ class Model:
         """
         return np.absolute(np.subtract(desired_output, actual_ouput))
 
-    def fit(self, Xs, Ys, lr=0.5, momentum=0.9, max_epochs=10000, tolerance=0.05):
+    def fit(self, Xs, Ys, lr=0.5, momentum=0.9, max_epochs=10000, tolerance=0.05, verbose=0):
         """
         Fit model on a set of data, this is not batch optimization
         :param Xs: np.array, set of attributes
@@ -297,7 +323,7 @@ class Model:
                 self.output_layer.back_propagate(error=err)
                 self.output_layer.update(lr=lr, momentum=momentum)
             early_stop = True
-            loss_sum = np.zeros(Ys[0,:].shape)
+            loss_sum = np.zeros(Ys[0, :].shape)
             for i in range(Xs.shape[0]):
                 # loop for early stop
                 x = Xs[i, :]
@@ -309,6 +335,9 @@ class Model:
                     early_stop = False
             loss_sum /= Ys.shape[0]
             log.append(loss_sum)
+            if verbose == 1:
+                if epoch % VERBOSE_ARGS['PRINT_SKIP_ITER'] == 0:
+                    self.print_weight()
             if early_stop:
                 break
 
@@ -320,16 +349,45 @@ class Model:
             result.append(self.input_layer.forward_propagate(Xs[i, :]))
         return np.array(result)
 
+    def print_weight(self):
+        print('=============================================================')
+        self.input_layer.print_weight()
+
 
 # sample test code
-input = InputLayer(3)
-hid1 = DenseLayer(5, input)
-hid2 = DenseLayer(2, hid1, isOutput=True)
+if False:
+    input = InputLayer(3)
+    hid1 = DenseLayer(5, input)
+    hid2 = DenseLayer(2, hid1, isOutput=True)
 
-mdl = Model(input, hid2)
+    mdl = Model(input, hid2)
 
-input_value = np.random.rand(2, 3)
-desired_output = np.array([[1, 0], [1, 1]])
-log = mdl.fit(Xs=input_value, Ys=desired_output,max_epochs=10000)
-print(mdl.predict(input_value))
-print(log)
+    input_value = np.random.rand(2, 3)
+    desired_output = np.array([[1, 0], [1, 1]])
+    log = mdl.fit(Xs=input_value, Ys=desired_output, max_epochs=10000, verbose=1)
+    print(mdl.predict(input_value))
+    print(log)
+if True:
+    import dataGenerator
+
+    dg = dataGenerator.ParityDataGenerator()
+    df = dg.generate_data()
+
+
+    def get_base_model_obj():
+        input = InputLayer(n_neurons=4)
+        hid1 = DenseLayer(n_neurons=4, previous_layer=input, activation_function=linear)
+        # hid1 = NN.DenseLayer(n_neurons=4, previous_layer=hid1)
+        hid2 = DenseLayer(n_neurons=1, previous_layer=hid1, isOutput=True)
+        mdl = Model(input_layer=input, output_layer=hid2)
+        return mdl
+
+
+    mdl = get_base_model_obj()
+    VERBOSE_ARGS['PRINT_SKIP_ITER'] = 1000
+    logs = []
+
+    df = df.sample(frac=1.0)
+    logs = mdl.fit(df.drop(columns=['label']).values, df['label'].values.reshape(-1, 1), lr=1e-2, momentum=0,
+                   max_epochs=10000, verbose=1)
+    print(logs[-1])

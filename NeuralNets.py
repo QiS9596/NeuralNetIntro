@@ -4,11 +4,10 @@ Each Layer objects have the reference to previous layer and next layer
 Each layer manages it's own n_neurons, including passing output of previous layer to all child n_neurons and collect the
 output of these n_neurons and pass them to next layer
 """
-import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib
 from abc import abstractmethod
-from tqdm import tqdm
+
+import matplotlib
+import numpy as np
 
 matplotlib.use('TkAgg')
 VERBOSE_ARGS = {'PRINT_SKIP_ITER': 100}
@@ -337,7 +336,7 @@ class Model:
             log.append(loss_sum)
             if verbose == 1:
                 if epoch % VERBOSE_ARGS['PRINT_SKIP_ITER'] == 0:
-                    print(str(epoch)+"th iteration")
+                    print(str(epoch) + "th iteration")
                     self.print_weight()
                     print(self.predict(Xs))
                     print(Ys)
@@ -386,19 +385,17 @@ if True:
         return mdl
 
 
-
     VERBOSE_ARGS['PRINT_SKIP_ITER'] = 1000
     logs = []
     lens = []
     df = df.sample(frac=1.0)
-    for lr in np.arange(0.05,0.04,-0.05):
+    for lr in np.arange(0.05, 0.04, -0.05):
         mdl = get_base_model_obj()
         logs = mdl.fit(df.drop(columns=['label']).values, df['label'].values.reshape(-1, 1), lr=lr, momentum=0,
-                       max_epochs=10000000, verbose=1, tolerance=0.15)
+                       max_epochs=10000000, verbose=1, tolerance=0.05)
         print(logs[-1])
-        lens.append((lr,len(logs)))
+        lens.append((lr, len(logs)))
 
-
-    with open('./log.txt','w') as file:
+    with open('./log.txt', 'w') as file:
         file.write(str(lens))
     print(lens)

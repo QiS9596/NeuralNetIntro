@@ -356,6 +356,58 @@ class Model:
         self.input_layer.print_weight()
 
 
+class KmeansClustering:
+    def __init__(self, k_centers=5):
+        self.k_centers = k_centers
+        self.centers = []
+        self.size_data = 0
+
+    def fit(self, data, max_iter=10000, epsilon=0.01):
+        self.size_data = data.shape[0]
+        if self.k_centers > self.size_data:
+            return
+        else:
+            # initialize k centers randomly
+            for i in np.random.choice(range(self.size_data)):
+                self.centers.append(data[i, :])
+        for i in range(0, max_iter): pass  # TODO
+
+    def cluster(self, data):
+        """
+        cluster the data points into clusters
+        :param data:
+        :return: list of clusters, each cluster is a tuple, consisting of a list of indexes of datapoints and the variance
+        if a cluster contains only 1 datapoint, it'll be set to the mean of all other variances
+        """
+        pass
+        # TODO
+
+    def assign_cluster(self, data_point):
+        """
+        assign a single datapoint into the nearest cluster
+        :param data_point:
+        :return: tuple(index, float) which is the index of the cluster and the squared euclidean distance
+        """
+        target_index = 0
+        minimum_distance_sqr = 99999.9
+        for i in range(self.k_centers):
+            distance_sqr = self.squared_euclidean_distance(self.centers[i],data_point)
+            # distance_sqr = np.square(np.linalg.norm(self.centers[i] - data_point))
+            if distance_sqr < minimum_distance_sqr:
+                minimum_distance_sqr = distance_sqr
+                target_index = i
+        return (target_index, minimum_distance_sqr)
+
+    @staticmethod
+    def squared_euclidean_distance(a, b):
+        """
+        calculate squared euclidean distance between datapoint a and b
+        :param a: np.array
+        :param b: np.array
+        :return: scalar
+        """
+        return np.square(np.linalg.norm(a - b))
+
 # sample test code
 if False:
     input = InputLayer(3)
@@ -369,7 +421,7 @@ if False:
     log = mdl.fit(Xs=input_value, Ys=desired_output, max_epochs=10000, verbose=1)
     print(mdl.predict(input_value))
     print(log)
-if True:
+if False:
     import dataGenerator
 
     dg = dataGenerator.ParityDataGenerator()

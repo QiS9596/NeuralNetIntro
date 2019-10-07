@@ -25,6 +25,19 @@ def linear(x, dx=False):
     return x
 
 
+class RBFNeurons:
+    def __init__(self, n_dim, center, variance, layer=None):
+        self.layer = layer
+        self.n_dim = n_dim
+        self.center = center
+        self.variance = variance
+
+    def forward_propagate(self, input):
+        dist = KmeansClustering.squared_euclidean_distance(input, self.center)
+        power = -1 / 2 * np.power(self.variance, 2) * dist
+        return np.exp(power)
+
+
 class Neuron:
     def __init__(self, n_dim, activation_func=sigmoid, layer=None):
         """
@@ -53,7 +66,7 @@ class Neuron:
         self.augmented_input = augmented_input
         return self.activation_func(self.pre_synapse_excites)
 
-    def back_propagate(self, delta_next=None, isOutput=False, err=None):
+    def back_propagate(self, delta_next=None, isOutput=False, err=None, use_LMS=False):
         """
 
         :param delta_next: weighted sum of delta, calculated at each layer object
@@ -61,6 +74,9 @@ class Neuron:
         :param err: error value for calculating the last layer
         :return: delta value for this neuron
         """
+        if use_LMS is True:
+            self.delta = err
+            return None
         if isOutput and err is not None:
             self.delta = err * self.activation_func(self.pre_synapse_excites, dx=True)
             return self.delta
@@ -105,6 +121,42 @@ class Layer:
         raise NotImplementedError
 
 
+class RBFLayer(Layer):
+    def __init__(self, n_neurons, previous_layer, data, name=None):
+        Layer.__init__(self, n_neurons, name)
+        self.next_layer = None
+        self.previous_layer = previous_layer
+        self.previous_layer.set_next_layer(self)
+        km = KmeansClustering(k_centers=n_neurons)
+        clusters = km.fit(data.reshape(-1, self.previous_layer.n_neurons))
+        self.neurons = []
+        self.isOutput = False
+        for i in range(n_neurons):
+            variance = clusters[i][1]
+            center = km.centers[i]
+            new_neuron = RBFNeurons(n_dim=self.previous_layer.n_neurons, center=center, variance=variance)
+            self.neurons.append(new_neuron)
+
+    def forward_propagate(self, previous_layer_output):
+        output = []
+        for i in range(len(self.neurons)):
+            output.append(self.neurons[i].forward_propagate(previous_layer_output))
+        output = np.array(output)
+        if self.isOutput:
+            return output
+        else:
+            return self.next_layer.forward_propagate(output)
+
+    def back_propagate(self):
+        self.previous_layer.back_propagate()
+
+    def update(self, lr=0.0, momentum=0.0):
+        self.previous_layer.update()
+
+    def print_weight(self):
+        self.next_layer.print_weight()
+
+
 class DenseLayer(Layer):
     """
     Dense layer (Fully-connected Feed-forward layer)
@@ -147,7 +199,7 @@ class DenseLayer(Layer):
         else:
             return self.next_layer.forward_propagate(output)
 
-    def back_propagate(self, error=None):
+    def back_propagate(self, error=None, use_LMS=False):
         """
         Back propagate algorithm, update delta for each neuron
         :param error: difference of actual output of expected output, should be None if this is not the output layer
@@ -158,7 +210,7 @@ class DenseLayer(Layer):
             # if the current layer is not the output layer, then we can calculate delta of the neurons based on diff of
             # actual output and expected output
             for i in range(len(self.neurons)):
-                delta_neuron = self.neurons[i].back_propagate(err=error[i], isOutput=True)
+                delta_neuron = self.neurons[i].back_propagate(err=error[i], isOutput=True, use_LMS=use_LMS)
                 delta_.append(delta_neuron)
             self.delta_ = delta_
             self.previous_layer.back_propagate()
@@ -298,7 +350,7 @@ class Model:
         """
         return np.absolute(np.subtract(desired_output, actual_ouput))
 
-    def fit(self, Xs, Ys, lr=0.5, momentum=0.9, max_epochs=10000, tolerance=0.05, verbose=0):
+    def fit(self, Xs, Ys, lr=0.5, momentum=0.9, max_epochs=10000, tolerance=0.05, verbose=0, use_LMS=False):
         """
         Fit model on a set of data, this is not batch optimization
         :param Xs: np.array, set of attributes
@@ -319,7 +371,7 @@ class Model:
                 y = Ys[i, :]
                 y_ = self.input_layer.forward_propagate(input=x)
                 err = self.err_(actual_output=y_, desired_output=y)
-                self.output_layer.back_propagate(error=err)
+                self.output_layer.back_propagate(error=err, use_LMS=use_LMS)
                 self.output_layer.update(lr=lr, momentum=momentum)
             early_stop = True
             loss_sum = np.zeros(Ys[0, :].shape)
@@ -334,12 +386,24 @@ class Model:
                     early_stop = False
             loss_sum /= Ys.shape[0]
             log.append(loss_sum)
+            x = Xs[i, :]
+            y = Ys[i, :]
+            y_ = self.input_layer.forward_propagate(input=x)
+            abs_error = self.abs_err_(actual_ouput=y_, desired_output=y)
             if verbose == 1:
                 if epoch % VERBOSE_ARGS['PRINT_SKIP_ITER'] == 0:
                     print(str(epoch) + "th iteration")
                     self.print_weight()
-                    print(self.predict(Xs))
-                    print(Ys)
+                    print(abs_error)
+                    # print(self.predict(Xs))
+                    # print(Ys)
+            elif verbose == 2:
+                if epoch % VERBOSE_ARGS['PRINT_SKIP_ITER'] == 0:
+                    print(str(epoch) + "th iteration")
+                    # print(self.predict(Xs))
+                    # print(Ys)
+
+                    print(abs_error)
             if early_stop:
                 break
 
@@ -378,7 +442,7 @@ class KmeansClustering:
             new_centers = []
             for ii in range(len(clusters)):
                 new_centers.append(np.average(clusters[ii][0], axis=0))
-            if self.early_stop(previous_centers=self.centers, new_centers=new_centers,epsilon=epsilon):
+            if self.early_stop(previous_centers=self.centers, new_centers=new_centers, epsilon=epsilon):
                 return clusters
             self.centers = new_centers
 

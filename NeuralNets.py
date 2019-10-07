@@ -368,19 +368,55 @@ class KmeansClustering:
             return
         else:
             # initialize k centers randomly
-            for i in np.random.choice(range(self.size_data)):
+            for i in np.random.choice(range(self.size_data), self.k_centers):
                 self.centers.append(data[i, :])
-        for i in range(0, max_iter): pass  # TODO
+        # iterations for update the clusters' centers
+        for i in range(0, max_iter):
+            # get datapoints into the clusters
+            clusters = self.cluster(data)
+            # get new centers
+            new_centers = []
+            for ii in range(len(clusters)):
+                new_centers.append(np.average(clusters[ii][0], axis=0))
+            if self.early_stop(previous_centers=self.centers, new_centers=new_centers,epsilon=epsilon):
+                return clusters
+            self.centers = new_centers
 
     def cluster(self, data):
         """
         cluster the data points into clusters
-        :param data:
+        :param data: set of data points, np.array
         :return: list of clusters, each cluster is a tuple, consisting of a list of indexes of datapoints and the variance
         if a cluster contains only 1 datapoint, it'll be set to the mean of all other variances
         """
-        pass
-        # TODO
+        size_data = data.shape[0]
+        clusters = self.k_centers * [None]
+        for i in range(len(clusters)):
+            clusters[i] = []
+        cluster_distance_sum = self.k_centers * [0.0]
+        # assign each datapoint to one of the clusters
+        for i in range(size_data):
+            datapoint = data[i, :]
+            cluster, dist = self.assign_cluster(datapoint)
+            clusters[cluster].append(datapoint)
+            cluster_distance_sum[cluster] += dist
+        # calculate the variance of the clusters
+        sum_var = 0.0
+        total_non_trival_cluster = 0
+        for i in range(self.k_centers):
+            if len(clusters[i]) <= 1:
+                variance = None
+            else:
+                variance = cluster_distance_sum[i] / len(clusters[i])
+                sum_var += variance
+                total_non_trival_cluster += 1
+            clusters[i] = (clusters[i], variance)
+        ave_var = sum_var / float(total_non_trival_cluster)
+        for i in range(self.k_centers):
+            if clusters[i][1] is None:
+                clusters[i] = (clusters[i][0], ave_var)
+                # clusters[i][1] = ave_var
+        return clusters
 
     def assign_cluster(self, data_point):
         """
@@ -391,12 +427,11 @@ class KmeansClustering:
         target_index = 0
         minimum_distance_sqr = 99999.9
         for i in range(self.k_centers):
-            distance_sqr = self.squared_euclidean_distance(self.centers[i],data_point)
-            # distance_sqr = np.square(np.linalg.norm(self.centers[i] - data_point))
+            distance_sqr = self.squared_euclidean_distance(self.centers[i], data_point)
             if distance_sqr < minimum_distance_sqr:
                 minimum_distance_sqr = distance_sqr
                 target_index = i
-        return (target_index, minimum_distance_sqr)
+        return target_index, minimum_distance_sqr
 
     @staticmethod
     def squared_euclidean_distance(a, b):
@@ -407,6 +442,23 @@ class KmeansClustering:
         :return: scalar
         """
         return np.square(np.linalg.norm(a - b))
+
+    @staticmethod
+    def early_stop(previous_centers, new_centers, epsilon):
+        """
+        calculate the squared Euclidean distance for each pair of old & new cluster centers, if all of the pairs has
+        Euclidean distance smaller than epsilon, it'll return True to trigger early stop, otherwise will return False
+        to push the algorithm not stopping
+        :param previous_centers: list of nparrays, list of centers of different clusters during previous iteration
+        :param new_centers: list of nparrays, which is a list of centers of different clusters
+        :param epsilon: float, the tolerance of difference
+        :return: boolean, True for early stop, False for keep iteration
+        """
+        for i in range(len(previous_centers)):
+            if KmeansClustering.squared_euclidean_distance(previous_centers[i], new_centers[i]) <= epsilon:
+                return True
+        return False
+
 
 # sample test code
 if False:
